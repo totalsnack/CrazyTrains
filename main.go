@@ -141,7 +141,7 @@ func (ts Trains) SortByCriteria(criteria string) (err error) {
 	return err
 }
 
-// StrToN StrToInt converts  string to natural number
+// StrToN StrToInt converts  string to natural number (reinventing the wheel)
 func StrToN(str string) (int, error) {
 	var (
 		num rune
@@ -218,18 +218,19 @@ func (t *Train) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// func (t *Train) MarshalJSON() ([]byte, error) {
-// 	m := make(map[string]interface{})
-// 	rt := reflect.TypeOf(t).Elem()
-// 	rv := reflect.ValueOf(*t)
-//
-// 	for i := 0; i < rv.NumField(); i++ {
-// 		getTag := rt.Field(i).Tag.Get
-// 		value := rv.Field(i).Interface()
-// 		if format := getTag("format"); format != "" {
-// 			value = value.(time.Time).Format(format) // we suppose that only time has 'format' tag
-// 		}
-// 		m[getTag("json")] = value // TODO: figure out what to do with order
-// 	}
-// 	return json.Marshal(m)
-// }
+// MarshalJSON marshall json being aware of time format
+func (t *Train) MarshalJSON() ([]byte, error) {
+	m := make(map[string]interface{})
+	rt := reflect.TypeOf(t).Elem()
+	rv := reflect.ValueOf(*t)
+
+	for i := 0; i < rv.NumField(); i++ {
+		getTag := rt.Field(i).Tag.Get
+		value := rv.Field(i).Interface()
+		if format := getTag("format"); format != "" {
+			value = value.(time.Time).Format(format) // we suppose that only time has 'format' tag
+		}
+		m[getTag("json")] = value // TODO: figure out what to do with order
+	}
+	return json.Marshal(m)
+}
