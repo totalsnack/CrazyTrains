@@ -28,9 +28,6 @@ type Config struct {
 	Criteria           string `json:"criteria"`
 }
 
-const ()
-
-// Sorting criteria
 const (
 	pathToData        = "./data.json"
 	pathToUserData    = "./config.json"
