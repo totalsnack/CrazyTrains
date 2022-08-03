@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"reflect"
 	"sort"
 	"time"
 )
@@ -17,8 +18,8 @@ type Train struct {
 	DepartureStationID int       `json:"departureStationId"`
 	ArrivalStationID   int       `json:"arrivalStationId"`
 	Price              float32   `json:"price"`
-	ArrivalTime        time.Time `json:"arrivalTime"`
-	DepartureTime      time.Time `json:"departureTime"`
+	ArrivalTime        time.Time `json:"arrivalTime" format:"15:04:05"`
+	DepartureTime      time.Time `json:"departureTime" format:"15:04:05"`
 }
 
 type Config struct {
@@ -41,9 +42,6 @@ const (
 
 const maxNumOfTrains = 3
 
-// HHMMSS 24h Missing time format
-const HHMMSS = "15:04:05"
-
 // These errors may be returned by entering user data
 var (
 	ErrCriteria       = errors.New("unsupported criteria")
@@ -54,6 +52,7 @@ var (
 )
 
 func main() {
+
 	//	... запит даних від користувача
 	config := &Config{}
 	if err := parseJson(pathToUserData, config); err != nil {
@@ -81,12 +80,6 @@ func FindTrains(departureStation, arrivalStation, criteria string) (Trains, erro
 		return nil, err
 	}
 
-	// Sort trains by criteria
-	err = trains.SortByCriteria(criteria)
-	if err != nil {
-		return nil, err
-	}
-
 	// Input data types conversion
 	a, err := StrToN(departureStation)
 	if err != nil {
@@ -102,6 +95,11 @@ func FindTrains(departureStation, arrivalStation, criteria string) (Trains, erro
 			return nil, ErrEmptyArrival
 		}
 		return nil, ErrBadArrival
+	}
+	// Sort trains by criteria
+	err = trains.SortByCriteria(criteria)
+	if err != nil {
+		return nil, err
 	}
 
 	// Filter needful trains
@@ -162,13 +160,6 @@ func StrToN(str string) (int, error) {
 	}
 	return 0, err
 }
-func parseTime(str string) (time.Time, error) {
-	tm, err := time.Parse(HHMMSS, str)
-	if err != nil {
-		return tm, fmt.Errorf("error parsing string %s to time from json: %w", str, err)
-	}
-	return tm, nil
-}
 
 func parseJson(path string, i any) error {
 	file, err := os.Open(path)
@@ -189,26 +180,56 @@ func parseJson(path string, i any) error {
 	return err
 }
 
-// UnmarshalJSON unmarshal data to json aware struct
-func (t *Train) UnmarshalJSON(data []byte) (err error) {
-	// It's lame, but we do not want play with reflection, right?
-	type clone Train
-	raw := &struct {
-		*clone
-		ArrivalTime   string `json:"arrivalTime"`
-		DepartureTime string `json:"departureTime"`
-	}{
-		clone: (*clone)(t),
-	}
-	if err = json.Unmarshal(data, &raw); err != nil {
+// UnmarshalJSON is over engineering
+func (t *Train) UnmarshalJSON(data []byte) error {
+	// it is an easy part []byte => map[string]interface{}
+	var raw, value interface{}
+	err := json.Unmarshal(data, &raw)
+	if err != nil {
 		return err
+	}
+	m, ok := raw.(map[string]interface{})
+	if !ok {
+		return errors.New("not a map")
 	}
 
-	if t.ArrivalTime, err = parseTime(raw.ArrivalTime); err != nil {
-		return err
-	}
-	if t.DepartureTime, err = parseTime(raw.DepartureTime); err != nil {
-		return err
+	// reflection and warfare
+	rt := reflect.TypeOf(*t)
+	rv := reflect.ValueOf(t).Elem()
+
+	for i := 0; i < rt.NumField(); i++ {
+		getTag := rt.Field(i).Tag.Get
+
+		tag := getTag("json")
+		value = m[tag]
+
+		if _, ok := value.(string); ok {
+			format := getTag("format")
+			value, err = time.Parse(format, value.(string))
+			if err != nil {
+				return fmt.Errorf("error parsing time from string %v json %w", value, err)
+			}
+		}
+		// sucker punch
+		pv := reflect.ValueOf(value)
+		fieldValue := rv.Field(i)
+		fieldValue.Set(pv.Convert(fieldValue.Type()))
 	}
 	return nil
 }
+
+// func (t *Train) MarshalJSON() ([]byte, error) {
+// 	m := make(map[string]interface{})
+// 	rt := reflect.TypeOf(t).Elem()
+// 	rv := reflect.ValueOf(*t)
+//
+// 	for i := 0; i < rv.NumField(); i++ {
+// 		getTag := rt.Field(i).Tag.Get
+// 		value := rv.Field(i).Interface()
+// 		if format := getTag("format"); format != "" {
+// 			value = value.(time.Time).Format(format) // we suppose that only time has 'format' tag
+// 		}
+// 		m[getTag("json")] = value // TODO: figure out what to do with order
+// 	}
+// 	return json.Marshal(m)
+// }

@@ -1,5 +1,5 @@
 {
   "departureStationId": "1902",
   "arrivalStationId": "1929",
-  "criteria": "price"
+  "criteria": "arrival-time"
 }
