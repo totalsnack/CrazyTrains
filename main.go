@@ -28,19 +28,19 @@ type Config struct {
 	Criteria           string `json:"criteria"`
 }
 
-const (
-	pathToData     = "./data.json"
-	pathToUserData = "./config.json"
-)
+const ()
 
 // Sorting criteria
 const (
+	pathToData        = "./data.json"
+	pathToUserData    = "./config.json"
 	priceCriteria     = "price"          // спершу дешеві
 	arrivalCriteria   = "arrival-time"   // спершу ті, що раніше прибувають
 	departureCriteria = "departure-time" // спершу ті, що раніше відправляються
+	maxNumOfTrains    = 3
+	jsonTag           = "json"
+	formatTag         = "format"
 )
-
-const maxNumOfTrains = 3
 
 // These errors may be returned by entering user data
 var (
@@ -180,7 +180,7 @@ func parseJson(path string, i any) error {
 	return err
 }
 
-// UnmarshalJSON is over engineering
+// UnmarshalJSON code below is over-engineering
 func (t *Train) UnmarshalJSON(data []byte) error {
 	// it is an easy part []byte => map[string]interface{}
 	var raw, value interface{}
@@ -200,11 +200,11 @@ func (t *Train) UnmarshalJSON(data []byte) error {
 	for i := 0; i < rt.NumField(); i++ {
 		getTag := rt.Field(i).Tag.Get
 
-		tag := getTag("json")
+		tag := getTag(jsonTag)
 		value = m[tag]
 
 		if _, ok := value.(string); ok {
-			format := getTag("format")
+			format := getTag(formatTag)
 			value, err = time.Parse(format, value.(string))
 			if err != nil {
 				return fmt.Errorf("error parsing time from string %v json %w", value, err)
@@ -218,7 +218,7 @@ func (t *Train) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// MarshalJSON marshall json being aware of time format
+// MarshalJSON marshall json aware time format
 func (t *Train) MarshalJSON() ([]byte, error) {
 	m := make(map[string]interface{})
 	rt := reflect.TypeOf(t).Elem()
@@ -227,10 +227,10 @@ func (t *Train) MarshalJSON() ([]byte, error) {
 	for i := 0; i < rv.NumField(); i++ {
 		getTag := rt.Field(i).Tag.Get
 		value := rv.Field(i).Interface()
-		if format := getTag("format"); format != "" {
+		if format := getTag(formatTag); format != "" {
 			value = value.(time.Time).Format(format) // we suppose that only time has 'format' tag
 		}
-		m[getTag("json")] = value // TODO: figure out what to do with order
+		m[getTag(jsonTag)] = value // TODO: figure out what to do with order
 	}
 	return json.Marshal(m)
 }
